@@ -85,4 +85,60 @@ class TokenBucketRateLimiterTest {
         assertThrows(IllegalArgumentException.class, () -> new TokenBucketRateLimiter(5, 0.0, clock));
         assertThrows(IllegalArgumentException.class, () -> new TokenBucketRateLimiter(5, -1.0, clock));
     }
+
+    @Test
+    void clockGoingBackwardsDoesNotGrantFreeTokens() {
+        // e.g. NTP adjustment or a container clock jump. If we naively did
+        // (now - lastRefill) * rate with a negative elapsed time, we'd
+        // *subtract* tokens or overflow weirdly. Must be a safe no-op instead.
+        TokenBucketRateLimiter limiter = new TokenBucketRateLimiter(2, 1.0, clock);
+
+        assertTrue(limiter.allowRequest("user-1"));
+        assertTrue(limiter.allowRequest("user-1"));
+        assertFalse(limiter.allowRequest("user-1")); // empty
+
+        clock.advance(-5000); // clock jumps backward 5 seconds
+        assertFalse(limiter.allowRequest("user-1")); // still empty, not broken
+
+        clock.advance(5000); // back to where we were, then +1s normally
+        clock.advance(1000);
+        assertTrue(limiter.allowRequest("user-1")); // refill resumes normally
+    }
+
+    @Test
+    void concurrentRequestsNeverExceedCapacity() throws InterruptedException {
+        // capacity 10, no refill during the test (rate is tiny, no time advances)
+        // 50 threads race for the same key -> exactly 10 should win, never more
+        TokenBucketRateLimiter limiter = new TokenBucketRateLimiter(10, 0.0001, clock);
+
+        int threadCount = 50;
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(threadCount);
+        java.util.concurrent.atomic.AtomicInteger allowedCount = new java.util.concurrent.atomic.AtomicInteger(0);
+        java.util.concurrent.CountDownLatch ready = new java.util.concurrent.CountDownLatch(threadCount);
+        java.util.concurrent.CountDownLatch go = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch done = new java.util.concurrent.CountDownLatch(threadCount);
+
+        for (int i = 0; i < threadCount; i++) {
+            pool.submit(() -> {
+                ready.countDown();
+                try {
+                    go.await(); // all threads fire as close to simultaneously as possible
+                    if (limiter.allowRequest("shared-key")) {
+                        allowedCount.incrementAndGet();
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    done.countDown();
+                }
+            });
+        }
+
+        ready.await();
+        go.countDown();
+        done.await();
+        pool.shutdown();
+
+        assertEquals(10, allowedCount.get(), "exactly capacity requests should be allowed under concurrent access");
+    }
 }
