@@ -1,0 +1,1 @@
+target/ out/ *.class .classpath .project .settings/ .idea/ *.iml .vscode/
