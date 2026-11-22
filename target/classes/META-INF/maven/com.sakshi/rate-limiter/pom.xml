@@ -10,16 +10,24 @@
     <packaging>jar</packaging>
 
     <name>rate-limiter</name>
-    <description>Distributed rate limiter library: Token Bucket, Sliding Window, Leaky Bucket (in-memory now, Redis-backed later)</description>
+    <description>Distributed rate limiter library: Token Bucket, Sliding Window, Leaky Bucket (in-memory, plus Redis-backed)</description>
 
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <junit.version>5.10.2</junit.version>
+        <jedis.version>5.1.0</jedis.version>
     </properties>
 
     <dependencies>
+        <!-- Redis client (talks to Redis, runs our Lua scripts) -->
+        <dependency>
+            <groupId>redis.clients</groupId>
+            <artifactId>jedis</artifactId>
+            <version>${jedis.version}</version>
+        </dependency>
+
         <!-- JUnit 5 for unit tests -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
