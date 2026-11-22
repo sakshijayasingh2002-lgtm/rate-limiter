@@ -50,13 +50,30 @@ final class RedisScriptExecutor {
      * On any Redis error, returns the fail-open/fail-closed choice instead.
      */
     boolean isAllowed(List<String> keys, List<String> args) {
+        Long result = evalLong(keys, args);
+        if (result == null) {
+            return failOpen;
+        }
+        return result == 1L;
+    }
+
+    /**
+     * Runs the script and returns its integer answer, or null if Redis failed
+     * (down, timeout, ...). Callers decide what a failure means for them.
+     */
+    Long evalLong(List<String> keys, List<String> args) {
         try (Jedis jedis = pool.getResource()) {
             Object result = run(jedis, keys, args);
             // A Lua integer comes back from Redis as a Long.
-            return result instanceof Long && ((Long) result) == 1L;
+            return (result instanceof Long) ? (Long) result : null;
         } catch (JedisException e) {
-            return failOpen;
+            return null;
         }
+    }
+
+    /** Whether a Redis failure should let requests through (true) or block them (false). */
+    boolean isFailOpen() {
+        return failOpen;
     }
 
     private Object run(Jedis jedis, List<String> keys, List<String> args) {
