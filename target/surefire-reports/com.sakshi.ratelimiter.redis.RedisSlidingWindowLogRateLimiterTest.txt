@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.sakshi.ratelimiter.redis.RedisSlidingWindowLogRateLimiterTest
+-------------------------------------------------------------------------------
+Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.237 s -- in com.sakshi.ratelimiter.redis.RedisSlidingWindowLogRateLimiterTest

@@ -1,5 +1,7 @@
 package com.sakshi.ratelimiter.redis;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.exceptions.JedisException;
@@ -10,6 +12,7 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Shared plumbing for every Redis-backed limiter: loads a Lua script from the
@@ -31,6 +34,12 @@ import java.util.List;
  * through and {@code false} rejects it.
  */
 final class RedisScriptExecutor {
+
+    private static final Logger LOG = LoggerFactory.getLogger(RedisScriptExecutor.class);
+
+    /** One warning per this many ms, shared by every limiter in the JVM, so a long outage can't flood the logs. */
+    private static final long WARN_INTERVAL_MILLIS = 10_000L;
+    private static final AtomicLong LAST_WARN_MILLIS = new AtomicLong(0L);
 
     private final JedisPool pool;
     private final String script;
@@ -67,7 +76,22 @@ final class RedisScriptExecutor {
             // A Lua integer comes back from Redis as a Long.
             return (result instanceof Long) ? (Long) result : null;
         } catch (JedisException e) {
+            warnThrottled(e);
             return null;
+        }
+    }
+
+    /**
+     * Redis errors are swallowed on purpose (fail open / fail closed), which would make an
+     * outage invisible. So we log a warning, at most once per WARN_INTERVAL_MILLIS.
+     */
+    private void warnThrottled(JedisException e) {
+        long now = System.currentTimeMillis();
+        long last = LAST_WARN_MILLIS.get();
+        if (now - last >= WARN_INTERVAL_MILLIS && LAST_WARN_MILLIS.compareAndSet(last, now)) {
+            LOG.warn("Rate limiter cannot reach Redis - failing {}: {}",
+                    failOpen ? "OPEN (requests are being allowed)" : "CLOSED (requests are being rejected)",
+                    e.getMessage());
         }
     }
 

@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.sakshi.ratelimiter.leakybucket.LeakyBucketRateLimiterTest
+-------------------------------------------------------------------------------
+Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.066 s -- in com.sakshi.ratelimiter.leakybucket.LeakyBucketRateLimiterTest
